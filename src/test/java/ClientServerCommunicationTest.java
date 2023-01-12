@@ -32,7 +32,6 @@ public class ClientServerCommunicationTest {
         OutputStream os = serverSocket.getOutputStream();
         sendMessageToServer = new PrintWriter(os, true);
 
-
     }
 
     @Test
@@ -52,7 +51,7 @@ public class ClientServerCommunicationTest {
 
             System.out.println(response);
         }
-        assertThat(lineNumbers,is(equalTo(messageToServer.length)));
+        assertThat(lineNumbers,is(greaterThan(messageToServer.length)));
     }
 
     @After

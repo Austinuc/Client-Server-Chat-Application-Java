@@ -1,10 +1,11 @@
-package servers;
+package org.example.servers;
 
 import lombok.Getter;
 import lombok.Setter;
 
 import java.io.*;
 import java.net.Socket;
+import java.time.LocalDateTime;
 import java.util.NoSuchElementException;
 import java.util.StringTokenizer;
 import java.util.Vector;
@@ -20,7 +21,12 @@ public class CommunicationHandler implements Runnable {
     private String name = null;
     public BufferedReader clientInputStream = null;
     public PrintWriter clientOutputStream = null;
-    private final Socket clientSocket;
+    private Socket clientSocket;
+
+    private CommunicationHandler(String name, boolean loggedInStatus) {
+        this.name = name;
+        this.loggedInStatus = loggedInStatus;
+    }
 
     public CommunicationHandler(Socket clientSocket) {
         this.name = "Client";
@@ -77,17 +83,24 @@ public class CommunicationHandler implements Runnable {
             }
         }
 
-        System.out.println(name +" has disconnected. Was handled by "+Thread.currentThread().getName());
+        System.out.println(name +" has disconnected. Was handled by "+Thread.currentThread().getName() + " --"+LocalDateTime.now());
         loggedInClients.remove(this);
 
         try {
             clientSocket.close();
             clientInputStream.close();
+            Thread.currentThread().interrupt();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
+    /**
+     * Ensures that message was sent in the correct format
+     * @param messageContent: sender message token
+     * @param sender: current instance of this thread
+     * @return the message sent by a sender
+     */
     public static String validateMessageContent(StringTokenizer messageContent, CommunicationHandler sender) {
         String messageToReceiver = "";
 
@@ -95,9 +108,10 @@ public class CommunicationHandler implements Runnable {
             //Get the message for the receiver
             messageToReceiver = messageContent.nextToken();
         } else {
-            System.out.println(sender.getName()+" sent a message without a receiver attached");
+            System.out.println(sender.getName()+" sent a message without a receiver attached. --" + LocalDateTime.now());
             sender.getClientOutputStream().println("?-> Message format error: <receiver name> : <your message>");
-            sender.getClientOutputStream().println("?-> Current logged in users: "+ loggedInClients);
+            sender.getClientOutputStream().println("?-> Current logged in users: "+ ((loggedInClients.size() == 1) ? "You're the only one online. You can run multiple clients": loggedInClients));
+            sender.getClientOutputStream().println("?-> Type 'bye' to exit");
             sender.getClientOutputStream().flush();
             return null;
         }
@@ -106,9 +120,10 @@ public class CommunicationHandler implements Runnable {
 
     public static void sendMessageToRecipient(CommunicationHandler receiver, String messageToReceiver, CommunicationHandler sender) {
 
-        if (receiver == null) {
-            System.out.println(receiver.getName()+" is unknown. Please check and try again");
-            sender.getClientOutputStream().println("?-> "+receiver.getName()+" is unknown. Please check and try again");
+        if (!receiver.loggedInStatus) {
+            System.out.println("Recipient not online! "+sender.getName() + " attempted to send message to " + receiver.getName() +": --"+ LocalDateTime.now());
+            sender.getClientOutputStream().println("?-> "+receiver.getName()+" is not currently online. Please list of current online users below");
+            sender.getClientOutputStream().println("?-> Current logged in users: "+ ((loggedInClients.size() == 1) ? "You're the only one online. You can run multiple clients": loggedInClients));
             sender.getClientOutputStream().flush();
             return;
         }
@@ -121,8 +136,13 @@ public class CommunicationHandler implements Runnable {
         System.out.println("message delivered to " + receiver.getName());
     }
 
+    /**
+     * Scans through a list of users currently logged in or active on chat
+     * @param recipient: name of the receiver
+     * @return a handler for the recipient
+     */
     public static CommunicationHandler getTheReceiverObject(String recipient) {
-        CommunicationHandler receiver = null;
+        CommunicationHandler receiver = new CommunicationHandler(recipient, false);
         for (CommunicationHandler e : loggedInClients) {
             if (e.name.equalsIgnoreCase(recipient)) {
                 receiver = e;
@@ -140,7 +160,8 @@ public class CommunicationHandler implements Runnable {
         if (sender.messageCount++ == 0) {
             System.out.println(sender.name + " is ready for chat");
             sender.clientOutputStream.println(">> This is the message format: <receiver name> : <your message>");
-            sender.getClientOutputStream().println("?-> Current logged in users: "+ loggedInClients);
+            sender.clientOutputStream.println("?-> Current logged in users: "+ ((loggedInClients.size() == 1) ? "You're the only one online. You can run multiple clients": loggedInClients));
+            sender.clientOutputStream.println("?-> Type 'bye' to exit");
             sender.clientOutputStream.flush();
             return null;
         }
